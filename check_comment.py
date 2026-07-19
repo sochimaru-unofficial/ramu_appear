@@ -4,7 +4,7 @@ import pytchat
 import requests
 
 # ---------------- 設定項目 ----------------
-VIDEO_URL = "https://www.youtube.com/live/Qk7-7AO_Z0Y" # 監視したい配信のURL
+VIDEO_URL = "Qk7-7AO_Z0Y" # 監視したい配信のURL
 TARGET_USER = "@O_Ramu_oo" # 探したい人の正確な名前
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1528391991485010111/my2lmN_LjX5x7fFxehOlCXHtjX9FQBEawrkT3Lt8cq42PgAd9BcRkyaqnQ2R1PnvAV0n" # DiscordのWebhook URL
 # ------------------------------------------
