@@ -31,52 +31,47 @@ def send_discord_notification(author, message, datetime_str):
     requests.post(DISCORD_WEBHOOK_URL, json=payload)
 
 def main():
-    last_check_time = get_last_check_time()
-    new_last_time = last_check_time
+    # 🧪 テスト用のダミーデータを作ります
+    class DummyComment:
+        def __init__(self, name, message, timestamp):
+            self.author = type('Author', (object,), {'name': name})()
+            self.message = message
+            self.timestamp = timestamp
+            self.datetime = "2026-07-20 00:00:00"
+
+    # 1. あなたが設定したターゲット名を取得
+    print(f"【テスト開始】設定されているターゲット名: {TARGET_USER}")
     
-    print(f"【ログ】前回のチェック基準時刻: {last_check_time}")
+    # 2. 架空のコメント履歴を3つ用意します
+    # （前回の時刻を 100.0 と仮定して、それより未来のタイムスタンプ 200.0 で検証します）
+    last_check_time = 100.0 
     
-    try:
-        chat = pytchat.create(video_id=VIDEO_URL)
+    items = [
+        DummyComment("一般の視聴者A", "こんにちは！", 200.0),
+        DummyComment(TARGET_USER, "テストコメントです！届くかな？", 200.0), # 💡 ここで名前が一致するはず
+        DummyComment("一般の視聴者B", "おつかれさまです", 200.0)
+    ]
+
+    print(f"【テスト】{len(items)}件のダミーコメントを読み込みました。検証を開始します。")
+    
+    for c in items:
+        current_timestamp = c.timestamp / 1000.0  # ミリ秒変換のシミュレート
+        current_timestamp = c.timestamp # テスト用にそのまま使用
         
-        # ✨ 改善ポイント：空振りを防ぐため、最大5回（約5秒間）データが取れるまでリトライする
-        retry_count = 0
-        items = []
-        while chat.is_alive() and retry_count < 5:
-            items = chat.get().sync_items()
-            if items: # データが取れたらループを抜ける
-                break
-            print("【ログ】チャットデータがまだ空のため、1秒待機して再取得します...")
-            time.sleep(1)
-            retry_count += 1
-            
-        if not items:
-            print("【ログ】チャットデータが取得できませんでした（新着なし、または待機中による制限）。処理を終了します。")
-            return
-
-        # 取得できたコメントを精査
-        print(f"【ログ】{len(items)}件のコメントを読み込みました。検証を開始します。")
-        for c in items:
-            current_timestamp = c.timestamp / 1000.0
-            
-            # どんなコメントが流れているかログに表示（原因特定用）
-            print(f" └ 確認中: [{c.author.name}]: {c.message}")
-            
-            if current_timestamp > last_check_time:
-                # ターゲット名が含まれているか判定
-                if TARGET_USER in c.author.name:
-                    print(f"🎯 【発見】{c.author.name}さんのコメントを検知しました！")
-                    send_discord_notification(c.author.name, c.message, c.datetime)
+        print(f" └ 確認中: [{c.author.name}]: {c.message}")
+        
+        if current_timestamp > last_check_time:
+            # 設定した名前が含まれているかチェック
+            if TARGET_USER in c.author.name:
+                print(f"🎯 【判定一致！】{c.author.name}さんのコメントを検知しました！")
                 
-                if current_timestamp > new_last_time:
-                    new_last_time = current_timestamp
-            
-    except Exception as e:
-        print(f"エラーが発生しました: {e}")
-        return
+                # 実際にDiscordに送ってみる
+                try:
+                    send_discord_notification(c.author.name, c.message, c.datetime)
+                    print("🚀 【Discord送信】成功しました！Discordを確認してください。")
+                except Exception as discord_err:
+                    print(f"❌ 【Discord送信エラー】Webhookの設定が違うかも: {discord_err}")
 
-    save_last_check_time(new_last_time)
-    print(f"【ログ】次回の基準時刻を更新しました: {new_last_time}")
-
+    print("【テスト終了】プログラムの判定チェックが完了しました。")
 if __name__ == "__main__":
     main()
