@@ -1,77 +1,74 @@
 import os
-import time
-import pytchat
+import sys
+import json
+import re
 import requests
 
 # ---------------- 設定項目 ----------------
-VIDEO_URL = "Qk7-7AO_Z0Y"                       # 監視したい配信のID
-TARGET_USER = "@O_Ramu_oo"                     # 探したい人の正確な名前
+VIDEO_URL = "Qk7-7AO_Z0Y"                           # 監視したい配信のID（ログにあったもの）
+TARGET_USER = "@O_Ramu_oo"                         # 探したい人の正確なアカウント名
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 # ------------------------------------------
 
-LAST_TIME_FILE = "last_comment_time.txt"
-
-def get_last_check_time():
-    if os.path.exists(LAST_TIME_FILE):
-        with open(LAST_TIME_FILE, "r") as f:
-            try:
-                return float(f.read().strip())
-            except ValueError:
-                return 0.0
-    return 0.0
-
-def save_last_check_time(timestamp):
-    with open(LAST_TIME_FILE, "w") as f:
-        f.write(str(timestamp))
-
-def send_discord_notification(author, message, datetime_str):
+def send_discord_notification(author, message):
     payload = {
-        "content": f"🔔 **【YouTube Live コメント通知】**\n**{author}** さんがコメントしました！\n💬 「{message}」\n🕒 {datetime_str}"
+        "content": f"🔔 **【YouTube Live 実機テスト成功！】**\n本物のチャットから検知しました！\n👤 **{author}** さん\n💬 「{message}」"
     }
     requests.post(DISCORD_WEBHOOK_URL, json=payload)
 
+def get_live_html(video_id):
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    response = requests.get(url, headers=headers)
+    return response.text
+
 def main():
-    # 🧪 テスト用のダミーデータを作ります
-    class DummyComment:
-        def __init__(self, name, message, timestamp):
-            self.author = type('Author', (object,), {'name': name})()
-            self.message = message
-            self.timestamp = timestamp
-            self.datetime = "2026-07-20 00:00:00"
-
-    # 1. あなたが設定したターゲット名を取得
-    print(f"【テスト開始】設定されているターゲット名: {TARGET_USER}")
+    print(f"【実機テスト開始】設定されているターゲット名: {TARGET_USER}")
+    print(f"【実機テスト】配信ID: {VIDEO_URL} の最新チャットを解析中...")
     
-    # 2. 架空のコメント履歴を3つ用意します
-    # （前回の時刻を 100.0 と仮定して、それより未来のタイムスタンプ 200.0 で検証します）
-    last_check_time = 100.0 
+    html = get_live_html(VIDEO_URL)
     
-    items = [
-        DummyComment("一般の視聴者A", "こんにちは！", 200.0),
-        DummyComment(TARGET_USER, "テストコメントです！届くかな？", 200.0), # 💡 ここで名前が一致するはず
-        DummyComment("一般の視聴者B", "おつかれさまです", 200.0)
-    ]
-
-    print(f"【テスト】{len(items)}件のダミーコメントを読み込みました。検証を開始します。")
-    
-    for c in items:
-        current_timestamp = c.timestamp / 1000.0  # ミリ秒変換のシミュレート
-        current_timestamp = c.timestamp # テスト用にそのまま使用
+    # YouTubeの画面データからチャットの生データ（JSON）を力技で抽出します
+    raw_data = re.search(r'ytInitialData\s*=\s*({.+?});', html)
+    if not raw_data:
+        print("❌ YouTubeのデータ構造の抽出に失敗しました。配信URLが間違っているか、ページ構成が変わっています。")
+        return
         
-        print(f" └ 確認中: [{c.author.name}]: {c.message}")
-        
-        if current_timestamp > last_check_time:
-            # 設定した名前が含まれているかチェック
-            if TARGET_USER in c.author.name:
-                print(f"🎯 【判定一致！】{c.author.name}さんのコメントを検知しました！")
-                
-                # 実際にDiscordに送ってみる
-                try:
-                    send_discord_notification(c.author.name, c.message, c.datetime)
-                    print("🚀 【Discord送信】成功しました！Discordを確認してください。")
-                except Exception as discord_err:
-                    print(f"❌ 【Discord送信エラー】Webhookの設定が違うかも: {discord_err}")
+    try:
+        json_data = json.loads(raw_data.group(1))
+        # 待機画面のチャットデータが入っている深い階層を掘り進みます
+        actions = json_data["contents"]["twoColumnWatchNextResults"]["conversationBar"]["liveChatRenderer"]["actions"]
+    except KeyError:
+        print("❌ チャットデータが見つかりませんでした。まだ誰もコメントしていないか、チャット欄が閉じられています。")
+        return
 
-    print("【テスト終了】プログラムの判定チェックが完了しました。")
+    # 一番最後（最新）のコメントを1件だけ取得
+    latest_action = actions[-1]
+    try:
+        item = latest_action["addChatItemAction"]["item"]["liveChatTextMessageRenderer"]
+        author_name = item["authorName"]["simpleText"]
+        
+        # メッセージテキストの組み立て
+        message_runs = item["message"]["runs"]
+        message_text = "".join([run.get("text", "") for run in message_runs])
+        
+        print(f"【取得成功】現在のチャット欄の最新コメント:")
+        print(f" └ [投稿者]: {author_name}")
+        print(f" └ [内 容]: {message_text}")
+        
+        # ターゲットの名前と一致するかチェック（部分一致）
+        if TARGET_USER in author_name:
+            print(f"🎯 【判定一致！！】ターゲットの最新コメントを検知しました！")
+            send_discord_notification(author_name, message_text)
+            print("🚀 Discordに本物の最新コメントを転送しました！確認してください。")
+        else:
+            print(f"⏭️ 判定不一致: 最新のコメントは別の人（{author_name}さん）のものでした。")
+            print(f"💡 ヒント: お目当ての「{TARGET_USER}」さんに、いまチャット欄へ新しく何かコメントを書き込んでもらってから、もう一度実行すると判定が一致します！")
+
+    except KeyError:
+        print("⚠️ 最新のデータが通常のテキストコメントではありませんでした（スタンプやスーパーチャットなど）。もう一度実行してみてください。")
+
 if __name__ == "__main__":
     main()
