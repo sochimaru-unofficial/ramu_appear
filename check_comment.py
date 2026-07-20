@@ -1,74 +1,82 @@
 import os
-import sys
 import json
 import re
 import requests
 
 # ---------------- 設定項目 ----------------
-VIDEO_URL = "Qk7-7AO_Z0Y"                           # 監視したい配信のID（ログにあったもの）
+VIDEO_URL = "Qk7-7AO_Z0Y"                           # 監視したい配信のID
 TARGET_USER = "@O_Ramu_oo"                         # 探したい人の正確なアカウント名
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 # ------------------------------------------
 
 def send_discord_notification(author, message):
     payload = {
-        "content": f"🔔 **【YouTube Live 実機テスト成功！】**\n本物のチャットから検知しました！\n👤 **{author}** さん\n💬 「{message}」"
+        "content": f"🔔 **【YouTube Live 執念のテスト成功！】**\nついにチャットの壁を突破して検知しました！\n👤 **{author}** さん\n💬 「{message}」"
     }
     requests.post(DISCORD_WEBHOOK_URL, json=payload)
 
-def get_live_html(video_id):
-    url = f"https://www.youtube.com/watch?v={video_id}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    response = requests.get(url, headers=headers)
-    return response.text
-
 def main():
     print(f"【実機テスト開始】設定されているターゲット名: {TARGET_USER}")
-    print(f"【実機テスト】配信ID: {VIDEO_URL} の最新チャットを解析中...")
     
-    html = get_live_html(VIDEO_URL)
+    url = f"https://www.youtube.com/watch?v={VIDEO_URL}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8"
+    }
     
-    # YouTubeの画面データからチャットの生データ（JSON）を力技で抽出します
+    html = requests.get(url, headers=headers).text
+    
+    # YouTubeの生データからチャットに関連するあらゆる部分を探し出します
     raw_data = re.search(r'ytInitialData\s*=\s*({.+?});', html)
     if not raw_data:
-        print("❌ YouTubeのデータ構造の抽出に失敗しました。配信URLが間違っているか、ページ構成が変わっています。")
+        print("❌ ページの解析に失敗しました。")
         return
         
+    comments_found = []
+    
     try:
         json_data = json.loads(raw_data.group(1))
-        # 待機画面のチャットデータが入っている深い階層を掘り進みます
-        actions = json_data["contents"]["twoColumnWatchNextResults"]["conversationBar"]["liveChatRenderer"]["actions"]
-    except KeyError:
-        print("❌ チャットデータが見つかりませんでした。まだ誰もコメントしていないか、チャット欄が閉じられています。")
+        # 待機画面のチャットデータをテキストから強引に検索・抽出するロジック
+        json_str = json.dumps(json_data)
+        
+        # コメント本文と投稿者名が含まれるオブジェクトを正規表現で全抽出します
+        text_messagers = re.findall(r'{"liveChatTextMessageRenderer":{.+?}}', json_str)
+        
+        print(f"【解析ログ】チャットの破片を {len(text_messagers)} 件発見しました。解析します。")
+        
+        for raw_item in text_messagers:
+            try:
+                item = json.loads(raw_item)["liveChatTextMessageRenderer"]
+                author_name = item["authorName"]["simpleText"]
+                message_text = "".join([run.get("text", "") for run in item["message"]["runs"]])
+                comments_found.append((author_name, message_text))
+            except:
+                continue
+                
+    except Exception as e:
+        print(f"❌ 解析中にエラーが発生しました: {e}")
         return
 
-    # 一番最後（最新）のコメントを1件だけ取得
-    latest_action = actions[-1]
-    try:
-        item = latest_action["addChatItemAction"]["item"]["liveChatTextMessageRenderer"]
-        author_name = item["authorName"]["simpleText"]
-        
-        # メッセージテキストの組み立て
-        message_runs = item["message"]["runs"]
-        message_text = "".join([run.get("text", "") for run in message_runs])
-        
-        print(f"【取得成功】現在のチャット欄の最新コメント:")
-        print(f" └ [投稿者]: {author_name}")
-        print(f" └ [内 容]: {message_text}")
-        
-        # ターゲットの名前と一致するかチェック（部分一致）
-        if TARGET_USER in author_name:
-            print(f"🎯 【判定一致！！】ターゲットの最新コメントを検知しました！")
-            send_discord_notification(author_name, message_text)
-            print("🚀 Discordに本物の最新コメントを転送しました！確認してください。")
-        else:
-            print(f"⏭️ 判定不一致: 最新のコメントは別の人（{author_name}さん）のものでした。")
-            print(f"💡 ヒント: お目当ての「{TARGET_USER}」さんに、いまチャット欄へ新しく何かコメントを書き込んでもらってから、もう一度実行すると判定が一致します！")
+    if not comments_found:
+        print("❌ やはりチャットデータが空っぽ、またはプログラムから見えない場所に隠されています。")
+        print("💡 対策: 配信が実際に『開始』されれば、このブロックは100%解除されて読めるようになります！")
+        return
 
-    except KeyError:
-        print("⚠️ 最新のデータが通常のテキストコメントではありませんでした（スタンプやスーパーチャットなど）。もう一度実行してみてください。")
+    print(f"【取得成功】チャット欄から {len(comments_found)} 件のコメントを復元しました（上が古く、下が最新です）：")
+    
+    # 復元したコメントをすべて表示して判定
+    target_detected = False
+    for author, msg in comments_found:
+        print(f" └ [{author}]: {msg}")
+        if TARGET_USER in author:
+            print(f"🎯 🎯 🎯 【判定一致！！】『{author}』さんのコメント「{msg}」を検知！")
+            send_discord_notification(author, msg)
+            target_detected = True
+            
+    if target_detected:
+        print("🚀 Discordへの転送命令を送信しました！")
+    else:
+        print(f"⏭️ 復元したログの中に「{TARGET_USER}」さんの名前は見つかりませんでした。")
 
 if __name__ == "__main__":
     main()
