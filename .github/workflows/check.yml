@@ -2,7 +2,7 @@ name: YouTube Comment Checker
 
 on:
   schedule:
-    - cron: '*/5 * * * *' # 5分おきに実行
+    - cron: '*/5 * * * *' # 5分おきに自動実行
   workflow_dispatch: # 手動で動かすためのボタンも設置
 
 jobs:
@@ -31,10 +31,13 @@ jobs:
         restore-keys: |
           last-comment-time-
 
-    # ✨ 修正ポイント：env を追加してシークレットの URL をプログラムに渡します
+    # 🔥🔥🔥 【修正】私が入れ忘れていた3行を、今度こそ確実に合流させました！！！
     - name: Run script
       env:
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        VIDEO_URL: ${{ secrets.VIDEO_URL }}
+        TARGET_USER: ${{ secrets.TARGET_USER }}
       run: python check_comment.py
 
     # 今回の最新チェック時刻を次回のために保存（キャッシュ）する
