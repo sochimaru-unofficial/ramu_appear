@@ -5,7 +5,7 @@ import requests
 # 🔐 設定項目：すべてGitHubの金庫（シークレット環境変数）から自動で安全に読み込みます
 VIDEO_URL = os.environ.get("VIDEO_URL")
 TARGET_USER = os.environ.get("TARGET_USER")
-API_KEY = os.environ.get("YOUTUBE_API_KEY")
+YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
 LAST_TIME_FILE = "last_comment_time.txt"
