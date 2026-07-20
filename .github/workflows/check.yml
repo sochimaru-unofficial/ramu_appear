@@ -2,8 +2,11 @@ name: YouTube Comment Checker
 
 on:
   schedule:
-    - cron: '*/6 * * * *' # 5分おきに自動実行
-  workflow_dispatch: # 手動で動かすためのボタンも設置
+    - cron: '*/6 * * * *' # 6分おきに自動実行
+  workflow_dispatch: # 手動実行ボタン
+
+permissions:
+  contents: write
 
 jobs:
   check:
@@ -20,27 +23,10 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install requests
 
-    # 1. 前回の実行時に保存した「全体の最後のコメント時刻」を復元
-    - name: Restore last check time
-      uses: actions/cache@v5
-      with:
-        path: last_comment_time.txt
-        key: last-comment-time-${{ github.run_id }}
-        restore-keys: |
-          last-comment-time-
-
-    # ✨ 追加ポイント：前回の実行時に保存した「ターゲットの最新コメント情報」を復元
-    - name: Restore target last comment
-      uses: actions/cache@v5
-      with:
-        path: target_last_comment.txt
-        key: target-last-comment-${{ github.run_id }}
-        restore-keys: |
-          target-last-comment-
-
-    # 4つの金庫の鍵をプログラムに渡す
+    # スクリプトを実行
     - name: Run script
       env:
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -49,16 +35,10 @@ jobs:
         TARGET_USER: ${{ secrets.TARGET_USER }}
       run: python check_comment.py
 
-    # 2. 今回の最新チェック時刻を次回のために保存
-    - name: Save last check time
-      uses: actions/cache@v5
-      with:
-        path: last_comment_time.txt
-        key: last-comment-time-${{ github.run_id }}
-
-    # ✨ 追加ポイント：今回のターゲットの最新コメント情報を次回のために保存
-    - name: Save target last comment
-      uses: actions/cache@v5
-      with:
-        path: target_last_comment.txt
-        key: target-last-comment-${{ github.run_id }}
+    # 更新されたJSONファイルがあれば自動でコミット＆プッシュして次回に引き継ぐ
+    - name: Commit and Push changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add comment_data.json
+        git diff --cached --quiet || (git commit -m "Update comment data [skip ci]" && git push)
