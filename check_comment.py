@@ -99,12 +99,19 @@ def main():
         items = res.get("items", [])
         print(f"【成功】公式API経由でチャットから新着コメントを検証中...（取得件数: {len(items)}件）", flush=True)
         
-        for item in items:
-            published_at = item["snippet"]["publishedAt"]
+for item in items:
+            published_at = item["snippet"]["publishedAt"]  # 例: "2026-07-19T14:14:09.99687Z"
             
-            dt_utc = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+            # ✨【修正】ミリ秒の桁数が変則的でもエラーにならないよう、秒までを確実にパース
+            time_str_seconds = published_at.split(".")[0]  # "2026-07-19T14:14:09" を抽出
+            if time_str_seconds.endswith("Z"):             # ドットが無いケースの保険
+                time_str_seconds = time_str_seconds[:-1]
+            
+            # UTC（世界標準時）として安全に datetime オブジェクトに変換
+            dt_utc = datetime.strptime(time_str_seconds, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
             current_timestamp = dt_utc.timestamp()
             
+            # ファイル保存用に正しい「日本時間」の文字列を作成
             dt_jst = dt_utc.astimezone(JST)
             jst_time_str = dt_jst.strftime("%Y-%m-%d %H:%M:%S")
             
