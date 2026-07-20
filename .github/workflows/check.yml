@@ -22,7 +22,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    # 前回の実行時に保存した「最後のコメント時刻」を復元する
+    # 1. 前回の実行時に保存した「全体の最後のコメント時刻」を復元
     - name: Restore last check time
       uses: actions/cache@v5
       with:
@@ -31,7 +31,16 @@ jobs:
         restore-keys: |
           last-comment-time-
 
-    # 🔥🔥🔥 【修正】私が入れ忘れていた3行を、今度こそ確実に合流させました！！！
+    # ✨ 追加ポイント：前回の実行時に保存した「ターゲットの最新コメント情報」を復元
+    - name: Restore target last comment
+      uses: actions/cache@v5
+      with:
+        path: target_last_comment.txt
+        key: target-last-comment-${{ github.run_id }}
+        restore-keys: |
+          target-last-comment-
+
+    # 4つの金庫の鍵をプログラムに渡す
     - name: Run script
       env:
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -40,9 +49,16 @@ jobs:
         TARGET_USER: ${{ secrets.TARGET_USER }}
       run: python check_comment.py
 
-    # 今回の最新チェック時刻を次回のために保存（キャッシュ）する
+    # 2. 今回の最新チェック時刻を次回のために保存
     - name: Save last check time
       uses: actions/cache@v5
       with:
         path: last_comment_time.txt
         key: last-comment-time-${{ github.run_id }}
+
+    # ✨ 追加ポイント：今回のターゲットの最新コメント情報を次回のために保存
+    - name: Save target last comment
+      uses: actions/cache@v5
+      with:
+        path: target_last_comment.txt
+        key: target-last-comment-${{ github.run_id }}
