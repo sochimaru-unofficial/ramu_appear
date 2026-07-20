@@ -5,7 +5,7 @@ import requests
 # 🔐 設定項目：すべてGitHubの金庫（シークレット環境変数）から自動で安全に読み込みます
 VIDEO_URL = os.environ.get("VIDEO_URL")
 TARGET_USER = os.environ.get("TARGET_USER")
-YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
+API_KEY = os.environ.get("YOUTUBE_API_KEY")
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
 LAST_TIME_FILE = "last_comment_time.txt"
@@ -30,12 +30,21 @@ def send_discord_notification(author, message):
     requests.post(DISCORD_WEBHOOK_URL, json=payload)
 
 def get_live_chat_id(video_id):
-    # 金庫から取り出した動画IDを使って、YouTube公式からチャットルームIDを取得
-    url = f"https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id={video_id}&key={API_KEY}"
+    # ✨ URLの組み立てを100%正しい形に一新しました
+    url = "https://www.googleapis.com/youtube/v3/videos"
+    params = {
+        "part": "liveStreamingDetails",
+        "id": video_id,
+        "key": API_KEY
+    }
+    
     try:
-        res = requests.get(url).json()
+        res = requests.get(url, params=params).json()
         return res["items"][0]["liveStreamingDetails"]["activeLiveChatId"]
     except (KeyError, IndexError):
+        # APIのエラーメッセージが返ってきた場合に原因が特定できるよう、ログに残します
+        if "error" in res:
+            print(f"⚠️ YouTube APIエラー: {res['error']['message']}", flush=True)
         return None
 
 def main():
@@ -55,11 +64,17 @@ def main():
     new_last_time = last_check_time
     print(f"【ログ】前回のチェック基準時刻: {last_check_time}", flush=True)
     
-    # 🔓 公式APIなので429エラー（Bot弾き）の心配は一切ありません！
-    url = f"https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId={chat_id}&part=snippet,authorDetails&key={API_KEY}&maxResults=200"
+    # 🔓 公式APIを使って安全に新着メッセージを取得します
+    chat_url = "https://www.googleapis.com/youtube/v3/liveChat/messages"
+    chat_params = {
+        "liveChatId": chat_id,
+        "part": "snippet,authorDetails",
+        "key": API_KEY,
+        "maxResults": 200
+    }
     
     try:
-        res = requests.get(url).json()
+        res = requests.get(chat_url, params=chat_params).json()
         items = res.get("items", [])
         print(f"【成功】公式API経由でチャットから新着コメントを検証中...（取得件数: {len(items)}件）", flush=True)
         
