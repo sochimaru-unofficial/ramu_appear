@@ -9,7 +9,7 @@ API_KEY = os.environ.get("YOUTUBE_API_KEY")
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
 LAST_TIME_FILE = "last_comment_time.txt"
-TARGET_COMMENT_FILE = "target_last_comment.txt" # ✨ ターゲット専用の保存ファイル
+TARGET_COMMENT_FILE = "target_last_comment.txt" # 裏でひっそり保存するファイル
 
 def get_last_check_time():
     if os.path.exists(LAST_TIME_FILE):
@@ -22,15 +22,7 @@ def save_last_check_time(timestamp):
     with open(LAST_TIME_FILE, "w") as f:
         f.write(str(timestamp))
 
-# ✨ ターゲットの最新コメント履歴を読み込む関数
-def print_target_last_comment():
-    if os.path.exists(TARGET_COMMENT_FILE):
-        with open(TARGET_COMMENT_FILE, "r", encoding="utf-8") as f:
-            print(f"📌 【ターゲットの直近の記録】\n{f.read()}", flush=True)
-    else:
-        print("📌 【ターゲットの直近の記録】まだこのシステムで検知したコメントはありません。", flush=True)
-
-# ✨ ターゲットの最新コメント履歴を保存する関数
+# 🤫 起動時のログ表示は削除し、保存するだけの機能に絞りました
 def save_target_last_comment(author, message, jst_time_str):
     with open(TARGET_COMMENT_FILE, "w", encoding="utf-8") as f:
         f.write(f"時刻: {jst_time_str}\n発言: {message}")
@@ -62,10 +54,6 @@ def main():
         print("❌ ライブチャットIDが取得できませんでした。", flush=True)
         return
         
-    # ✨ 起動時に、前回収穫した推しのコメントをログに表示！
-    print_target_last_comment()
-    print("--------------------------------------------------", flush=True)
-    
     last_check_time = get_last_check_time()
     new_last_time = last_check_time
     
@@ -87,7 +75,7 @@ def main():
             time_struct = time.strptime(published_at.split(".")[0], "%Y-%m-%dT%H:%M:%S")
             current_timestamp = time.mktime(time_struct)
             
-            # 日本時間に変換した文字列を作る（ログ・ファイル保存用）
+            # 日本時間に変換した文字列（ファイル保存用）
             jst_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(current_timestamp))
             
             if current_timestamp > last_check_time:
@@ -95,10 +83,10 @@ def main():
                 message_text = item["snippet"]["displayMessage"]
                 
                 if TARGET_USER in author_name or author_name in TARGET_USER:
-                    print(f"🎯 【判定一致！】{author_name}さんのコメント「{message_text}」を検知！", flush=True)
+                    print(f"🎯 【判定一致！】ターゲットのコメントを検知！", flush=True)
                     send_discord_notification(author_name, message_text)
                     
-                    # ✨ 推しが発言したら、その内容と時間をファイルに上書き保存！
+                    # 🤫 ログには出さず、裏のファイルにだけ最新発言として上書き保存
                     save_target_last_comment(author_name, message_text, jst_time_str)
                 
                 if current_timestamp > new_last_time:
